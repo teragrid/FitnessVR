@@ -7,6 +7,7 @@
     "@nomiclabs/hardhat-waffle": "^2.0.0",
     "@openzeppelin/contracts": "^4.0.0",
     "@openzeppelin/test-helpers": "^0.5.15",
+    "@remix-project/remixd": "^0.5.7",
     "@supercharge/promise-pool": "^2.0.0",
     "axios": "^0.24.0",
     "chai": "^4.2.0",
