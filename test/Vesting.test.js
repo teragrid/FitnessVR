@@ -21,7 +21,7 @@ contract('Vesting with ganache time traveler', async (accounts) =>  {
             snapshot = await timeMachine.takeSnapshot();
             snapshotId = snapshot['result'];
             token = await MUUVToken.deployed("MultiWorld", "MUUV");
-            pool = await Vesting.new(token.address, true);
+            pool = await Vesting.new(token.address);
             today = Math.floor(snapshot['id'] / MILISECONDS_IN_DAY) + 1;
         });
      
