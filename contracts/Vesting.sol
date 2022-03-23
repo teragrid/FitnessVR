@@ -58,7 +58,7 @@ contract Vesting is Ownable {
         uint32 _cliffPeriod,
         uint32 _interval,
         uint32 _milestones
-    ) public {
+    ) public onlyOwner {
         require(!_isSetSchedule, "Vesting/setVestingSchedule: vesting was already scheduled!");
         require(block.timestamp / SECONDS_PER_DAY < _startDate, "Vesting/setVestingSchedule: schedule start date after current date");
         require(_cliffPeriod % _interval == 0, "Vesting/setVestingSchedule: cliff period must divisible by interval");
