@@ -14,12 +14,13 @@ contract Vesting is Ownable {
     bool private _isSetSchedule;
     uint256 private _totalAmountInvested;
     Schedule private _schedule;
+    uint8 private _tgeUnlockPercent;
+    uint32 private _tgeUnlockDate;
 
     struct User {
         uint256 amount;
         uint256 amountClaimed;
-        uint256 receivedAmountEachMilestone;
-        uint256 proccessMilestones;
+        uint256 tgeAmountClaimed;
     }
 
     struct Schedule {
@@ -34,12 +35,14 @@ contract Vesting is Ownable {
     event AddUser(address indexed account, uint256 indexed amount);
     event AddManyUser(address[] indexed accounts, uint256[] amounts);
     event RemoveUser(address indexed account);
+    event SetTGE(uint8 percent, uint32 tgeUnlockDate);
     event SetVestingSchedule(
         uint32 startDate,
         uint32 cliffPeriodDate,
         uint32 interval,
         uint32 milestones
     );
+    event WithdrawTGEUnlock(address indexed user, uint256 amount);
     event WithdrawToken(address indexed user, uint256 amount);
 
     constructor(address token) {
@@ -51,6 +54,19 @@ contract Vesting is Ownable {
     modifier isUserInVesting(address _addr) {
         require(_users[_addr].amount > 0, "Vesting/modifier: user is not in vesting");
         _;
+    }
+
+    modifier isVestingScheduled() {
+        require(_isSetSchedule, "Vesting/setVestingSchedule: vesting need to be scheduled!");
+        _;
+    }
+
+    function setTGEUnlock(uint8 _percent, uint32 _tgeDate) public onlyOwner isVestingScheduled(){
+        require(_percent > 0, "Vesting/setTGEUnlock: TGE unlock percent must greater than 0");
+        require(_tgeDate < _schedule.cliffPeriodDate, "Vesting/setTGEUnlock: TGE unlock date must before cliff period date");
+        _tgeUnlockPercent = _percent;
+        _tgeUnlockDate = _tgeDate;
+        emit SetTGE(_percent, _tgeDate);
     }
 
     function setVestingSchedule(
@@ -71,15 +87,15 @@ contract Vesting is Ownable {
     function addOneUser(address account, uint256 amount)
         public
         onlyOwner
+        isVestingScheduled()
     {
-        require(_isSetSchedule, "Vesting/setVestingSchedule: vesting need to be scheduled!");
         require(amount > 0, "Vesting/addOneUser: insufficient amount");
         require(block.timestamp / SECONDS_PER_DAY < _schedule.startDate, "Vesting/addOneUser: can not add subscriber after vesting started");
         require(_users[account].amount == 0, "Vesting/addOneUser: user is already in vesting");
         require(_token.balanceOf(address(this)) >= _totalAmountInvested + amount, "Vesting/addOneUser: not enough supply in pool");
 
         _totalAmountInvested += amount;
-        _users[account] = User(amount, 0, amount / _schedule.milestones, 0);
+        _users[account] = User(amount, 0, 0);
         emit AddUser(account, amount);
     }
 
@@ -104,27 +120,47 @@ contract Vesting is Ownable {
     
         _totalAmountInvested -= _users[account].amount;
 
-        _users[account].amount = 0;
-        _users[account].amountClaimed = 0;
-        _users[account].receivedAmountEachMilestone = 0;
-        _users[account].proccessMilestones = 0;
+        delete _users[account];
+
         emit RemoveUser(account);
     }
 
-    function withdraw() external isUserInVesting(msg.sender) {
-        uint256 releaseTime = block.timestamp / SECONDS_PER_DAY;
-        require(releaseTime >= _schedule.cliffPeriodDate, "Vesting/withdraw: cliffPeriod not expired");
-        uint256 _currentMilestone = (releaseTime - _schedule.cliffPeriodDate) / _schedule.interval + 1;
-        if(_currentMilestone > _schedule.milestones) {
-            _currentMilestone = _schedule.milestones;
+    function withdraw() external isUserInVesting(msg.sender) isVestingScheduled(){
+        uint32 releaseTime = uint32(block.timestamp / SECONDS_PER_DAY);
+        User memory user = _users[msg.sender];
+        uint256 possibleWithdrawAmount;
+
+        if(_tgeUnlockPercent > 0) {
+            require(releaseTime >= _tgeUnlockDate, "Vesting/withdraw: can not withdraw TGE token before TGE unlock date");
+            if(user.tgeAmountClaimed == 0) {
+                uint256 tgeAmountClaim = (user.amount / _tgeUnlockPercent) / 100;
+                possibleWithdrawAmount += tgeAmountClaim;
+                user.tgeAmountClaimed += tgeAmountClaim;
+                emit WithdrawTGEUnlock(msg.sender, tgeAmountClaim);
+            }
+        } else {
+            require(releaseTime >= _schedule.cliffPeriodDate, "Vesting/withdraw: cliffPeriod not expired");
         }
-        require(_users[msg.sender].proccessMilestones < _currentMilestone, "Vesting/withdraw: released token this milestone");
+    
+        if (releaseTime >= _schedule.startDate + _schedule.interval * _schedule.milestones) {
+            possibleWithdrawAmount += (user.amount - (user.amountClaimed + user.tgeAmountClaimed));
+        } else if (releaseTime >= _schedule.cliffPeriodDate) {
 
-        uint256 transferAmount = _users[msg.sender].receivedAmountEachMilestone * (_currentMilestone - _users[msg.sender].proccessMilestones);
-        _users[msg.sender].proccessMilestones = _currentMilestone;
-        _users[msg.sender].amountClaimed += transferAmount;
+            uint32 milestonesVested = (releaseTime - _schedule.cliffPeriodDate) / _schedule.interval + 1;
+            if(milestonesVested > _schedule.milestones) {
+                milestonesVested = _schedule.milestones;
+            }
+            uint256 vested = ((user.amount- user.tgeAmountClaimed) * milestonesVested) / _schedule.milestones;
+            possibleWithdrawAmount = vested - user.amountClaimed;
+        }
 
-        _token.safeTransfer(msg.sender, transferAmount);
+        require(possibleWithdrawAmount > 0, "Vesting/withdraw: user withdraw zero token");
+
+        _users[msg.sender].amountClaimed += (possibleWithdrawAmount - user.tgeAmountClaimed);
+
+        _token.safeTransfer(msg.sender, possibleWithdrawAmount);
+
+        emit WithdrawToken(msg.sender, possibleWithdrawAmount);
     }
 
 }
