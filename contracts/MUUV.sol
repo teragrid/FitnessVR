@@ -4,8 +4,10 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-contract MMUV is Ownable, ERC20 {
-    constructor(string memory _name, string memory _symbol) ERC20(_name, _symbol) {}
+contract MUUV is Ownable, ERC20 {
+    constructor(string memory _name, string memory _symbol) ERC20(_name, _symbol) {
+        _mint(msg.sender, 9 * (8 ** decimals()));
+    }
 
     function mint(address account, uint256 amount) external onlyOwner {
         _mint(account, amount);
