@@ -98,6 +98,15 @@ contract Vesting is Ownable {
         emit SetTGE(_idVesting, _percent, _tgeDate);
     }
 
+    function getVestingSchedule(uint32 _idVesting) public view returns (uint32 startDate, uint32 cliffPeriod, uint32 milestones, uint32 interval) {
+        Schedule memory schedule = _idToVesting[_idVesting].schedule;
+        return (schedule.startDate, schedule.cliffPeriodDate, schedule.milestones, schedule.interval);
+    }
+
+    function getVestingSupply(uint32 _idVesting) public view returns (uint256 amount) {
+        return _idToVesting[_idVesting].totalSupply;
+    }
+
     function setVestingSchedule(
         uint32 _idVesting,
         uint32 _startDate,
