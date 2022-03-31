@@ -103,8 +103,8 @@ contract Vesting is Ownable {
         return (schedule.startDate, schedule.cliffPeriodDate, schedule.milestones, schedule.interval);
     }
 
-    function getVestingSupply(uint32 _idVesting) public view returns (uint256 amount) {
-        return _idToVesting[_idVesting].totalSupply;
+    function getVestingData(uint32 _idVesting) public view returns (uint256 totalSupply, uint256 totalAmountInvested, uint256 totalLinearBlock) {
+        return (_idToVesting[_idVesting].totalSupply, _idToVesting[_idVesting].totalAmountInvested, _idToVesting[_idVesting].totalLinearBlock);
     }
 
     function setVestingSchedule(
@@ -121,9 +121,11 @@ contract Vesting is Ownable {
         require((block.timestamp / SECONDS_PER_DAY) < _startDate, "Vesting/setVestingSchedule: schedule start date after current date");
 
         if(_idToVesting[_idVesting].vestingType == Type.Linearly) {
+            require(_milestones== 0 && _interval ==0, "Vesting/setVestingSchedule: schedule linearly milestones and interval must be zero");
             _idToVesting[_idVesting].schedule = Schedule(_startDate, _startDate + _cliffPeriod, 0, 0);
             _idToVesting[_idVesting].totalLinearBlock = _linearDuration * 86400;
         } else {
+            require(_linearDuration== 0, "Vesting/setVestingSchedule: schedule monthly linear duration must be zero");
             _idToVesting[_idVesting].schedule = Schedule(_startDate, _startDate + _cliffPeriod, _interval, _milestones);
         }
 
@@ -172,10 +174,15 @@ contract Vesting is Ownable {
         emit RemoveUser(_idVesting, _account);
     }
 
+    function vestingOf(uint32 _idVesting, address _u) external view returns (uint256 amount, uint256 amountClaimed, uint256 tgeAmountClaimed) {
+        User memory _user = _idToVesting[_idVesting].users[_u];
+        return (_user.amount, _user.amountClaimed, _user.tgeAmountClaimed);
+    }
+
     function withdraw(uint32 _idVesting) external isUserInVesting(_idVesting, msg.sender) isVestingScheduled(_idVesting){
         uint32 releaseTime = uint32(block.timestamp / SECONDS_PER_DAY);
         VestingModel storage _vestingModel = _idToVesting[_idVesting];
-        User memory _user = _vestingModel.users[msg.sender];
+        User storage _user = _vestingModel.users[msg.sender];
         uint256 possibleWithdrawAmount;
 
         if(_vestingModel.tge.tgeUnlockPercent > 0) {
@@ -195,7 +202,7 @@ contract Vesting is Ownable {
         uint256 vestedWithdrawAmount;
 
         if(_idToVesting[_idVesting].vestingType == Type.Monthly) {
-            if (releaseTime >= _schedule.startDate + _schedule.interval * _schedule.milestones) {
+            if (releaseTime >= _schedule.cliffPeriodDate + _schedule.interval * _schedule.milestones) {
                 possibleWithdrawAmount += (_user.amount - (_user.amountClaimed + _user.tgeAmountClaimed));
             } else if (releaseTime >= _schedule.cliffPeriodDate) {
 
@@ -216,6 +223,7 @@ contract Vesting is Ownable {
                 vestedWithdrawAmount = ((_user.amount- _user.tgeAmountClaimed) * countBlockFromLastClaimed) / _idToVesting[_idVesting].totalLinearBlock;
                 possibleWithdrawAmount += vestedWithdrawAmount;
             }
+            _user.lastBlockClaimed = currentBlock;
         }
 
         require(possibleWithdrawAmount > 0, "Vesting/withdraw: user withdraw zero token");
@@ -225,6 +233,10 @@ contract Vesting is Ownable {
         _token.safeTransfer(msg.sender, possibleWithdrawAmount);
 
         emit WithdrawToken(_idVesting, msg.sender, possibleWithdrawAmount);
+    }
+
+    function getCurrentBlock() external view returns (uint256 blockNum) {
+        return block.number;
     }
 
 }

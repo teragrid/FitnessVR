@@ -35,10 +35,11 @@ let token;
     const ONE_MILLION = 1000000;
 
     describe("test logic: ", async() =>{
+        let today;
 
         beforeEach(async() => {
             let vests = [9 * ONE_MILLION, 81 * ONE_MILLION, 81 * ONE_MILLION, 18 * ONE_MILLION, 288 * ONE_MILLION, 27 * ONE_MILLION, 198 * ONE_MILLION, 9 * ONE_MILLION, 144 * ONE_MILLION, 45 * ONE_MILLION];
-            let types = [true, true, true, true, true, true, true, true, true, true];
+            let types = [false, false, false, true, true, false, true, false, true, false];
             let MUUVToken = await ethers.getContractFactory('MUUV');
             let Vesting = await ethers.getContractFactory('Vesting');
             token = await MUUVToken.deploy("MultiWorld", "MUUV");
@@ -61,29 +62,172 @@ let token;
             expect(x).to.equal(900000000);
         });
         
-        it('1.3: set vesting schedule', async () => {
+        it('1.3: withdraw tge before cliff - monthly', async () => {
             const blockNumAfter = await ethers.provider.getBlockNumber();
             const blockAfter = await ethers.provider.getBlock(blockNumAfter);
             const timestamp = blockAfter.timestamp;
+            let today = Math.floor(timestamp/86400);
     
-            console.log(timestamp);
             const [owner, acc1] = await ethers.getSigners();
             await token.transfer(pool.address, 900000000);
         
-            await pool.setVestingSchedule(0, 19112, 2, 2, 5, 0);
-            await pool.addOneUser(0, acc1.address, 20000);
+            await pool.setVestingSchedule(3, today + 30, 30, 30, 6, 0);
+            await pool.setTGEUnlock(3, 20, today + 40);
+            await pool.addOneUser(3, acc1.address, 30000);
+            console.log("start: " + (today + 30));
 
-            await ethers.provider.send('evm_increaseTime', [86400 * 20]);
+            await ethers.provider.send('evm_increaseTime', [86400 * 40]);
 
             try{
-                await pool.connect(acc1).withdraw(0);
+                await pool.connect(acc1).withdraw(3);
             } catch (e) {
                 throw e;
             }
 
+            let y;
+            y= await pool.vestingOf(3, acc1.address);
+            console.log("----withdraw tge before cliff");
+            console.log("u amount: " + y.amount);
+            console.log("u amount claimed: " + y.amountClaimed);
+            console.log("u tge amount: " + y.tgeAmountClaimed);
+
+            await ethers.provider.send('evm_increaseTime', [86400 * 50]);
+
+            await pool.connect(acc1).withdraw(3);
+
+            y = await pool.vestingOf(3, acc1.address);
+            console.log("----withdraw milestone2");
+            console.log("u amount: " + y.amount);
+            console.log("u amount claimed: " + y.amountClaimed);
+            console.log("u tge amount: " + y.tgeAmountClaimed);
+
+            await ethers.provider.send('evm_increaseTime', [86400 * 90]);
+
+            await pool.connect(acc1).withdraw(3);
+
+            y = await pool.vestingOf(3, acc1.address);
+            console.log("----withdraw milestone5");
+            console.log("u amount: " + y.amount);
+            console.log("u amount claimed: " + y.amountClaimed);
+            console.log("u tge amount: " + y.tgeAmountClaimed);
+
+
             let x = await token.balanceOf(acc1.address);
             console.log("x: " + parseInt(x));
 
-            expect(x).to.equal(20000);
+            expect(x).to.equal(26000);
+        });
+        
+        it('1.4: withdraw tge after cliff - monthly', async () => {
+            const blockNumAfter = await ethers.provider.getBlockNumber();
+            const blockAfter = await ethers.provider.getBlock(blockNumAfter);
+            const timestamp = blockAfter.timestamp;
+            let today = Math.floor(timestamp/86400);
+    
+            const [owner, acc1] = await ethers.getSigners();
+            await token.transfer(pool.address, 900000000);
+        
+            await pool.setVestingSchedule(3, today + 30, 30, 30, 6, 0);
+            await pool.setTGEUnlock(3, 20, today + 40);
+            await pool.addOneUser(3, acc1.address, 30000);
+            console.log("start: " + (today + 30));
+
+            await ethers.provider.send('evm_increaseTime', [86400 * 60]);
+
+            try{
+                await pool.connect(acc1).withdraw(3);
+            } catch (e) {
+                throw e;
+            }
+
+            let y;
+            y= await pool.vestingOf(3, acc1.address);
+            console.log("----withdraw tge after cliff, milestone 1");
+            console.log("u amount: " + y.amount);
+            console.log("u amount claimed: " + y.amountClaimed);
+            console.log("u tge amount: " + y.tgeAmountClaimed);
+
+
+            let x = await token.balanceOf(acc1.address);
+            console.log("x: " + parseInt(x));
+
+            expect(x).to.equal(10000);
+        });
+
+        
+        
+        it('2.1: withdraw tge after cliff', async () => {
+            const blockNumAfter = await ethers.provider.getBlockNumber();
+            const blockAfter = await ethers.provider.getBlock(blockNumAfter);
+            const timestamp = blockAfter.timestamp;
+            let today = Math.floor(timestamp/86400);
+    
+            const [owner, acc1] = await ethers.getSigners();
+            await token.transfer(pool.address, 900000000);
+        
+            await pool.setVestingSchedule(3, today + 30, 30, 30, 6, 0);
+            await pool.setTGEUnlock(3, 20, today + 40);
+            await pool.addOneUser(3, acc1.address, 30000);
+            console.log("start: " + (today + 30));
+
+            await ethers.provider.send('evm_increaseTime', [86400 * 60]);
+
+            try{
+                await pool.connect(acc1).withdraw(3);
+            } catch (e) {
+                throw e;
+            }
+
+            let y;
+            y= await pool.vestingOf(3, acc1.address);
+            console.log("----withdraw tge after cliff, milestone 1");
+            console.log("u amount: " + y.amount);
+            console.log("u amount claimed: " + y.amountClaimed);
+            console.log("u tge amount: " + y.tgeAmountClaimed);
+
+
+            let x = await token.balanceOf(acc1.address);
+            console.log("x: " + parseInt(x));
+
+            expect(x).to.equal(10000);
+        });
+        
+        
+        it('3.1: withdraw tge after cliff linearly', async () => {
+            const blockNumAfter = await ethers.provider.getBlockNumber();
+            const blockAfter = await ethers.provider.getBlock(blockNumAfter);
+            const timestamp = blockAfter.timestamp;
+            let today = Math.floor(timestamp/86400);
+    
+            const [owner, acc1] = await ethers.getSigners();
+            await token.transfer(pool.address, 900000000);
+        
+            await pool.setVestingSchedule(7, today + 30, 365, 0, 0, 365 * 2);
+            await pool.addOneUser(7, acc1.address, 30000);
+            let block = await pool.getCurrentBlock();
+            console.log("current block 1: " + block);
+
+            await ethers.provider.send('evm_increaseTime', [86400 * 395]);
+
+            console.log("current block 2: " + block);
+
+            try{
+                await pool.connect(acc1).withdraw(7);
+            } catch (e) {
+                throw e;
+            }
+
+            let y;
+            y= await pool.vestingOf(7, acc1.address);
+            console.log("----withdraw tge after cliff linearly");
+            console.log("u amount: " + y.amount);
+            console.log("u amount claimed: " + y.amountClaimed);
+            console.log("u tge amount: " + y.tgeAmountClaimed);
+
+
+            let x = await token.balanceOf(acc1.address);
+            console.log("x: " + parseInt(x));
+
+            expect(x).to.equal(10000);
         });
     });
