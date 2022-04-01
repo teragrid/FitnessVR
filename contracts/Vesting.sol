@@ -89,22 +89,32 @@ contract Vesting is Ownable {
         _;
     }
 
-    function setTGEUnlock(uint32 _idVesting, uint32 _percent, uint32 _tgeDate) public onlyOwner isVestingScheduled(_idVesting){
-        require(_percent > 0, "Vesting/setTGEUnlock: TGE unlock percent must greater than 0");
-        Schedule memory _schedule = _idToVesting[_idVesting].schedule;
-        require((block.timestamp / SECONDS_PER_DAY) < _schedule.startDate, "Vesting/setTGEUnlock: only set up TGE before start date");
-        require(_tgeDate < _schedule.cliffPeriodDate, "Vesting/setTGEUnlock: TGE unlock date must before cliff period date");
-        _idToVesting[_idVesting].tge = TGE(_percent, _tgeDate);
-        emit SetTGE(_idVesting, _percent, _tgeDate);
+    function getMonthlyVestingData(uint32 _idVesting) public view isVestingScheduled(_idVesting) returns (
+        uint256 totalSupply,
+        uint256 totalAmountInvested,
+        uint32 percent, uint32 tgeUnlockdate,
+        uint32 startDate, uint32 cliffPeriodDate, uint32 milestones, uint32 interval
+         ) {
+        VestingModel storage vestingModel = _idToVesting[_idVesting];
+        return (
+            vestingModel.totalSupply,
+            vestingModel.totalAmountInvested,
+            vestingModel.tge.tgeUnlockPercent, vestingModel.tge.tgeUnlockDate,
+            vestingModel.schedule.startDate, vestingModel.schedule.cliffPeriodDate, vestingModel.schedule.milestones, vestingModel.schedule.interval);
     }
 
-    function getVestingSchedule(uint32 _idVesting) public view returns (uint32 startDate, uint32 cliffPeriod, uint32 milestones, uint32 interval) {
-        Schedule memory schedule = _idToVesting[_idVesting].schedule;
-        return (schedule.startDate, schedule.cliffPeriodDate, schedule.milestones, schedule.interval);
-    }
-
-    function getVestingData(uint32 _idVesting) public view returns (uint256 totalSupply, uint256 totalAmountInvested, uint256 totalLinearBlock) {
-        return (_idToVesting[_idVesting].totalSupply, _idToVesting[_idVesting].totalAmountInvested, _idToVesting[_idVesting].totalLinearBlock);
+    function getLinearlyVestingData(uint32 _idVesting) public view isVestingScheduled(_idVesting) returns (
+        uint256 totalSupply,
+        uint256 totalAmountInvested,
+        uint32 percent, uint32 tgeUnlockdate,
+        uint32 startDate, uint32 cliffPeriodDate, uint256 totalLinearBlock
+         ) {
+        VestingModel storage vestingModel = _idToVesting[_idVesting];
+        return (
+            vestingModel.totalSupply,
+            vestingModel.totalAmountInvested,
+            vestingModel.tge.tgeUnlockPercent, vestingModel.tge.tgeUnlockDate,
+            vestingModel.schedule.startDate, vestingModel.schedule.cliffPeriodDate, vestingModel.totalLinearBlock);
     }
 
     function setVestingSchedule(
@@ -117,19 +127,73 @@ contract Vesting is Ownable {
     ) public onlyOwner {
         require(_idVesting >= 0 && _idVesting <= 9, "Vesting/setVestingSchedule: idVesting must from 0 to 9!");
         require(_startDate > 0, "Vesting/setVestingSchedule: invalid startDate!");
-        require(_idToVesting[_idVesting].schedule.startDate == 0, "Vesting/setVestingSchedule: vesting was already scheduled!");
         require((block.timestamp / SECONDS_PER_DAY) < _startDate, "Vesting/setVestingSchedule: schedule start date after current date");
 
         if(_idToVesting[_idVesting].vestingType == Type.Linearly) {
             require(_milestones== 0 && _interval ==0, "Vesting/setVestingSchedule: schedule linearly milestones and interval must be zero");
             _idToVesting[_idVesting].schedule = Schedule(_startDate, _startDate + _cliffPeriod, 0, 0);
-            _idToVesting[_idVesting].totalLinearBlock = _linearDuration * 86400;
+            _idToVesting[_idVesting].totalLinearBlock = block.number + _linearDuration;
         } else {
-            require(_linearDuration== 0, "Vesting/setVestingSchedule: schedule monthly linear duration must be zero");
+            require(_linearDuration == 0, "Vesting/setVestingSchedule: schedule monthly linear duration must be zero");
             _idToVesting[_idVesting].schedule = Schedule(_startDate, _startDate + _cliffPeriod, _interval, _milestones);
         }
 
         emit SetVestingSchedule(_idVesting, _startDate, _startDate + _cliffPeriod, _interval, _milestones, _linearDuration);
+    }
+
+    function editVestingSchedule(
+        uint32 _idVesting,
+        uint32 _startDate,
+        uint32 _cliffPeriod,
+        uint32 _interval,
+        uint32 _milestones,
+        uint32 _linearDuration
+    ) public onlyOwner isVestingScheduled(_idVesting) {
+        Schedule memory schedule = _idToVesting[_idVesting].schedule;
+        require((block.timestamp / SECONDS_PER_DAY) < schedule.startDate, "Vesting/editVestingSchedule: only edit schedule before vesting started");
+
+        if(_idToVesting[_idVesting].vestingType == Type.Linearly) {
+            require(_startDate != schedule.startDate ||
+            (_startDate + _cliffPeriod) != schedule.cliffPeriodDate ||
+            (block.number + _linearDuration) != _idToVesting[_idVesting].totalLinearBlock,
+            "Vesting/editVestingSchedule: must edit at least one value of linearly vesting schedule");
+        } else {
+            require(_startDate != schedule.startDate ||
+            (_startDate + _cliffPeriod) != schedule.cliffPeriodDate ||
+            _interval != schedule.interval ||
+            _milestones != schedule.milestones,
+            "Vesting/editVestingSchedule: must edit at least one value of monthly vesting schedule");
+        }
+
+        if(_idToVesting[_idVesting].tge.tgeUnlockDate > 0) {
+            require(_startDate < _idToVesting[_idVesting].tge.tgeUnlockDate, "Vesting/editVestingSchedule: new start date must before tge unlock date");
+            require(( _startDate + _cliffPeriod) > _idToVesting[_idVesting].tge.tgeUnlockDate, 
+            "Vesting/editVestingSchedule: new cliff period date must after tge unlock date");
+        }
+
+        setVestingSchedule(_idVesting, _startDate, _cliffPeriod, _interval, _milestones, _linearDuration);
+    }
+
+    function setTGEUnlock(uint32 _idVesting, uint32 _percent, uint32 _tgeDate) public onlyOwner isVestingScheduled(_idVesting){
+        require(_percent > 0, "Vesting/setTGEUnlock: TGE unlock percent must greater than 0");
+        Schedule memory _schedule = _idToVesting[_idVesting].schedule;
+        require((block.timestamp / SECONDS_PER_DAY) < _schedule.startDate, "Vesting/setTGEUnlock: only set up TGE before start date");
+        require(_tgeDate < _schedule.cliffPeriodDate, "Vesting/setTGEUnlock: TGE unlock date must before cliff period date");
+        _idToVesting[_idVesting].tge = TGE(_percent, _tgeDate);
+        emit SetTGE(_idVesting, _percent, _tgeDate);
+    }
+
+    function editTGEUnlock(uint32 _idVesting, uint32 _percent, uint32 _tgeDate) public onlyOwner isVestingScheduled(_idVesting) {
+        TGE memory tge = _idToVesting[_idVesting].tge;
+        Schedule memory schedule = _idToVesting[_idVesting].schedule;
+        require((block.timestamp / SECONDS_PER_DAY) < schedule.startDate, "Vesting/editTGEUnlock: only edit tge before vesting started");
+        require(tge.tgeUnlockPercent > 0, "Vesting/editTGEUnlock: TGE was not set before");
+        require(schedule.startDate < _tgeDate, "Vesting/editVestingSchedule: new tge unlock must after start date");
+        require(schedule.cliffPeriodDate > _tgeDate, 
+        "Vesting/editVestingSchedule: new tge unlock must before cliff period date");
+        require(_percent != tge.tgeUnlockPercent || _tgeDate != tge.tgeUnlockDate, "Vesting/editVestingSchedule: must edit at least one value of tge");
+
+        setTGEUnlock(_idVesting, _percent, _tgeDate);
     }
 
     function addOneUser(uint32 _idVesting, address account, uint256 amount)
@@ -163,7 +227,7 @@ contract Vesting is Ownable {
         }
     }
 
-    function removeUser(uint32 _idVesting, address _account) public onlyOwner isUserInVesting(_idVesting, _account) {
+    function removeOneUser(uint32 _idVesting, address _account) public onlyOwner isUserInVesting(_idVesting, _account) {
         VestingModel storage _vestingModel = _idToVesting[_idVesting];
         require(_vestingModel.schedule.startDate >= uint32(block.timestamp / SECONDS_PER_DAY), "Vesting/removeUser: can't remove user when vesting started");
     
@@ -172,6 +236,12 @@ contract Vesting is Ownable {
         delete _vestingModel.users[_account];
 
         emit RemoveUser(_idVesting, _account);
+    }
+
+    function removeManyUser(uint32 _idVesting, address[] memory accounts) external onlyOwner {
+        for (uint256 index = 0; index < accounts.length; index++) {
+            removeOneUser(_idVesting, accounts[index]);
+        }
     }
 
     function vestingOf(uint32 _idVesting, address _u) external view returns (uint256 amount, uint256 amountClaimed, uint256 tgeAmountClaimed) {
@@ -217,12 +287,12 @@ contract Vesting is Ownable {
             uint256 currentBlock = block.number;
             require(currentBlock > _user.lastBlockClaimed, "Vesting/withdraw: user last block claimed is invalid");
             if (currentBlock >= _idToVesting[_idVesting].totalLinearBlock) {
-                possibleWithdrawAmount += (_user.amount - (_user.amountClaimed + _user.tgeAmountClaimed));
+                vestedWithdrawAmount += (_user.amount - (_user.amountClaimed + _user.tgeAmountClaimed));
             } else {
                 uint256 countBlockFromLastClaimed = currentBlock - _user.lastBlockClaimed;
                 vestedWithdrawAmount = ((_user.amount- _user.tgeAmountClaimed) * countBlockFromLastClaimed) / _idToVesting[_idVesting].totalLinearBlock;
-                possibleWithdrawAmount += vestedWithdrawAmount;
             }
+            possibleWithdrawAmount += vestedWithdrawAmount;
             _user.lastBlockClaimed = currentBlock;
         }
 
@@ -234,9 +304,4 @@ contract Vesting is Ownable {
 
         emit WithdrawToken(_idVesting, msg.sender, possibleWithdrawAmount);
     }
-
-    function getCurrentBlock() external view returns (uint256 blockNum) {
-        return block.number;
-    }
-
 }
