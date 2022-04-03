@@ -13,7 +13,6 @@ interface AntiBot {
 }
 
 contract MUUV is Ownable, ERC20 {
-
     AntiBot public ab;
     bool public abEnabled;
     address private _devAddress;
@@ -30,7 +29,7 @@ contract MUUV is Ownable, ERC20 {
     }
 
     function setABEnabled(bool _enabled) external onlyOwner {
-        require(address(ab) != address(0), "anti bot not found");
+        require(address(ab) != address(0), "MUUV: Anti bot not found");
         abEnabled = _enabled;
     }
 
@@ -43,7 +42,7 @@ contract MUUV is Ownable, ERC20 {
         address to,
         uint256 amount
     ) internal virtual override(ERC20) {
-         if (abEnabled) {
+        if (abEnabled) {
             uint256 fee = ab.protect(from, to, amount);
 
             if (fee > 0) {
@@ -55,5 +54,4 @@ contract MUUV is Ownable, ERC20 {
             super._transfer(from, to, amount);
         }
     }
-   
 }
