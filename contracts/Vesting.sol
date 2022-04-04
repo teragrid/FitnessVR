@@ -186,6 +186,9 @@ contract Vesting is Ownable {
                 userToVesting[_account].amountClaimed
         );
 
+        totalVesting -= (userToVesting[_account].amount -
+            userToVesting[_account].amountClaimed);
+
         delete userToVesting[_account];
 
         emit RemoveUser(_account);
@@ -202,6 +205,8 @@ contract Vesting is Ownable {
         require(claimableAmount > 0, "Vesting: Nothing to claim");
 
         userToVesting[_msgSender()].amountClaimed += claimableAmount;
+
+        totalVesting -= claimableAmount;
 
         token.safeTransfer(_msgSender(), claimableAmount);
 
