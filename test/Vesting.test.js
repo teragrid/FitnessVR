@@ -22,12 +22,11 @@ const { advanceBlock, advanceBlockTo } = require("@openzeppelin/test-helpers/src
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
-const  current = Math.floor(Date.now() / 1000);
-
 
 let token;
     let pool;
     let today;
+    let current;
 
     const SECONDS_IN_DAY = 86400;
     const MILISECONDS_IN_DAY = 86400000;
@@ -38,8 +37,13 @@ let token;
         beforeEach(async() => {
             let MUUVToken = await ethers.getContractFactory('MUUV');
             let Vesting = await ethers.getContractFactory('Vesting');
+            const blockNumAfter = await ethers.provider.getBlockNumber();
+            const blockAfter = await ethers.provider.getBlock(blockNumAfter);
+            const timestamp = blockAfter.timestamp;
+            current = Math.floor(timestamp / 1000);
+            console.log("current: " + current)
             token = await MUUVToken.deploy();
-            pool = await Vesting.deploy(token.address, current + SECONDS_IN_DAY * 10, SECONDS_IN_DAY * 2);
+            pool = await Vesting.deploy(token.address, current + SECONDS_IN_DAY * 30, 2);
         });
     
         it('1.1: mint token', async () => {
@@ -56,5 +60,30 @@ let token;
             console.log("x: " + parseInt(x));
 
             expect(x).to.equal(900000000);
+        });
+
+        
+        it('1.3: withdraw tge 0% - monthly', async () => {
+    
+            const [owner, acc1] = await ethers.getSigners();
+            await token.transfer(pool.address, 900000000);
+            await pool.setTGETimestamp(current + SECONDS_IN_DAY);
+    
+            await pool.addUser(acc1.address, 100000, 0, 0, SECONDS_IN_DAY * 100, 0);
+            console.log("start: " + (today + 30));
+
+            await ethers.provider.send('evm_increaseTime', [86400 * 130]);
+            console.log(" evm_increaseTime current: " + current + 86400 * 130);
+
+            try{
+                await pool.connect(acc1).claim();
+            } catch (e) {
+                throw e;
+            }
+
+            let x = await token.balanceOf(acc1.address);
+            console.log("x: " + parseInt(x));
+
+            expect(x).to.equal(5000);
         });
     });
