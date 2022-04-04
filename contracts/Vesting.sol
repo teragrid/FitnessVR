@@ -228,18 +228,18 @@ contract Vesting is Ownable {
     {
         UserVestingInfo memory info = userToVesting[_user];
 
-        if (block.timestamp < tgeTimestamp) return 0;
+        if (block.timestamp < tgeTimestamp) return 0; //current = 1756203488, tgeTimestamp = 1750155474
 
-        uint256 totalUnlock = (info.tgeUnlockPercentage * info.amount) / 100;
+        uint256 totalUnlock = (info.tgeUnlockPercentage * info.amount) / 100; // 0
 
-        uint256 passedBlocks = (block.timestamp - tgeTimestamp) /
+        uint256 passedBlocks = (block.timestamp - tgeTimestamp) /  //(1756203488 - 1750155488)/3 = 2016000
             SECONDS_PER_BLOCK;
 
         if (passedBlocks == 0) return totalUnlock;
 
         if (passedBlocks <= info.cliffPeriod) return totalUnlock;
 
-        passedBlocks -= info.cliffPeriod;
+        passedBlocks -= info.cliffPeriod; //2016000
 
         if (info.vestingType == VestingType.NEARLY) {
             totalUnlock =
@@ -250,15 +250,15 @@ contract Vesting is Ownable {
 
             return totalUnlock - info.amountClaimed;
         } else if (info.vestingType == VestingType.MONTHLY) {
-            uint256 passedPeriods = passedBlocks / unlockPeriod;
+            uint256 passedPeriods = passedBlocks / unlockPeriod; // 2016000 / 2 = 1008000
 
             totalUnlock =
                 totalUnlock +
                 ((((100 - info.tgeUnlockPercentage) * info.amount) / 100) *
                     passedPeriods) /
-                info.vestingDuration;
+                info.vestingDuration; // (((100 * 100000) / 100) * 1008000)/8640000 = 11666.6666667
 
-            return totalUnlock - info.amountClaimed;
+            return totalUnlock - info.amountClaimed; // 11666.6666667
         }
     }
 }

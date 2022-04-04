@@ -40,10 +40,12 @@ let token;
             const blockNumAfter = await ethers.provider.getBlockNumber();
             const blockAfter = await ethers.provider.getBlock(blockNumAfter);
             const timestamp = blockAfter.timestamp;
-            current = Math.floor(timestamp / 1000);
+            current = timestamp;
             console.log("current: " + current)
             token = await MUUVToken.deploy();
             pool = await Vesting.deploy(token.address, current + SECONDS_IN_DAY * 30, 2);
+            console.log("tgetimétamp: " + (current + SECONDS_IN_DAY * 30))
+            console.log("unlockPeriod: " + 2);
         });
     
         it('1.1: mint token', async () => {
@@ -70,10 +72,11 @@ let token;
             await pool.setTGETimestamp(current + SECONDS_IN_DAY);
     
             await pool.addUser(acc1.address, 100000, 0, 0, SECONDS_IN_DAY * 100, 0);
-            console.log("start: " + (today + 30));
+            console.log("sta_vestingDurationrt: " + (SECONDS_IN_DAY * 100));
 
-            await ethers.provider.send('evm_increaseTime', [86400 * 130]);
-            console.log(" evm_increaseTime current: " + current + 86400 * 130);
+            let x;
+            await ethers.provider.send('evm_increaseTime', [86400 * 100]);
+            console.log(" evm_increaseTime current: " + (current +86400 * 100));
 
             try{
                 await pool.connect(acc1).claim();
@@ -81,9 +84,9 @@ let token;
                 throw e;
             }
 
-            let x = await token.balanceOf(acc1.address);
+            x = await token.balanceOf(acc1.address);
             console.log("x: " + parseInt(x));
 
-            expect(x).to.equal(5000);
+            expect(x).to.equal(11666);
         });
     });
