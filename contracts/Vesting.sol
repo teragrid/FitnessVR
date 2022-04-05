@@ -17,15 +17,13 @@ contract Vesting is Ownable {
         uint256 amount;
         uint256 tgeUnlockPercentage;
         uint256 amountClaimed;
-        uint256 cliffPeriod; // calculated by the number of blocks
-        uint256 vestingDuration; // calculated by the number of unlock period
+        uint256 cliffPeriod; // calculated by the number of seconds
+        uint256 numberOfPeriods; // calculated by the number of unlock period
         VestingType vestingType;
         bool exist;
     }
 
-    uint256 public unlockPeriod; // calculated by the number of blocks
-
-    uint32 public constant SECONDS_PER_BLOCK = 3;
+    uint256 public unlockPeriod; // calculated by the number of seconds
 
     IERC20 public token;
 
@@ -90,7 +88,7 @@ contract Vesting is Ownable {
         uint256 _amount,
         uint256 _tgeUnlockPercentage,
         uint256 _cliffPeriod,
-        uint256 _vestingDuration,
+        uint256 _numberOfPeriods,
         VestingType _vestingType
     ) public onlyOwner {
         _addUser(
@@ -98,7 +96,7 @@ contract Vesting is Ownable {
             _amount,
             _tgeUnlockPercentage,
             _cliffPeriod,
-            _vestingDuration,
+            _numberOfPeriods,
             _vestingType
         );
     }
@@ -108,7 +106,7 @@ contract Vesting is Ownable {
         uint256[] memory _amounts,
         uint256[] memory _tgeUnlockPercentages,
         uint256[] memory _cliffPeriods,
-        uint256[] memory _vestingDurations,
+        uint256[] memory _numberOfPeriodss,
         VestingType[] memory _vestingTypes
     ) public onlyOwner {
         require(
@@ -116,8 +114,8 @@ contract Vesting is Ownable {
                 _accounts.length == _amounts.length &&
                 _amounts.length == _tgeUnlockPercentages.length &&
                 _tgeUnlockPercentages.length == _cliffPeriods.length &&
-                _cliffPeriods.length == _vestingDurations.length &&
-                _vestingDurations.length == _vestingTypes.length,
+                _cliffPeriods.length == _numberOfPeriodss.length &&
+                _numberOfPeriodss.length == _vestingTypes.length,
             "Vesting: Invalid parameters"
         );
 
@@ -127,7 +125,7 @@ contract Vesting is Ownable {
                 _amounts[i],
                 _tgeUnlockPercentages[i],
                 _cliffPeriods[i],
-                _vestingDurations[i],
+                _numberOfPeriodss[i],
                 _vestingTypes[i]
             );
         }
@@ -138,7 +136,7 @@ contract Vesting is Ownable {
         uint256 _amount,
         uint256 _tgeUnlockPercentage,
         uint256 _cliffPeriod,
-        uint256 _vestingDuration,
+        uint256 _numberOfPeriods,
         VestingType _vestingType
     ) internal {
         require(
@@ -157,7 +155,7 @@ contract Vesting is Ownable {
         userToVesting[_account].amount = _amount;
         userToVesting[_account].tgeUnlockPercentage = _tgeUnlockPercentage;
         userToVesting[_account].cliffPeriod = _cliffPeriod;
-        userToVesting[_account].vestingDuration = _vestingDuration;
+        userToVesting[_account].numberOfPeriods = _numberOfPeriods;
         userToVesting[_account].vestingType = _vestingType;
         userToVesting[_account].exist = true;
 
@@ -228,37 +226,35 @@ contract Vesting is Ownable {
     {
         UserVestingInfo memory info = userToVesting[_user];
 
-        if (block.timestamp < tgeTimestamp) return 0; //current = 1756203488, tgeTimestamp = 1750155474
+        if (block.timestamp < tgeTimestamp) return 0;
 
-        uint256 totalUnlock = (info.tgeUnlockPercentage * info.amount) / 100; // 0
+        uint256 totalUnlock = (info.tgeUnlockPercentage * info.amount) / 100;
 
-        uint256 passedBlocks = (block.timestamp - tgeTimestamp) /  //(1756203488 - 1750155488)/3 = 2016000
-            SECONDS_PER_BLOCK;
+        uint256 passedSeconds = block.timestamp - tgeTimestamp;
 
-        if (passedBlocks == 0) return totalUnlock;
+        if (passedSeconds == 0 || passedSeconds <= info.cliffPeriod)
+            return totalUnlock;
 
-        if (passedBlocks <= info.cliffPeriod) return totalUnlock;
-
-        passedBlocks -= info.cliffPeriod; //2016000
+        passedSeconds -= info.cliffPeriod;
 
         if (info.vestingType == VestingType.NEARLY) {
             totalUnlock =
                 totalUnlock +
                 ((((100 - info.tgeUnlockPercentage) * info.amount) / 100) *
-                    passedBlocks) /
-                (unlockPeriod * info.vestingDuration);
+                    passedSeconds) /
+                (unlockPeriod * info.numberOfPeriods);
 
             return totalUnlock - info.amountClaimed;
         } else if (info.vestingType == VestingType.MONTHLY) {
-            uint256 passedPeriods = passedBlocks / unlockPeriod; // 2016000 / 2 = 1008000
+            uint256 passedPeriods = passedSeconds / unlockPeriod;
 
             totalUnlock =
                 totalUnlock +
                 ((((100 - info.tgeUnlockPercentage) * info.amount) / 100) *
                     passedPeriods) /
-                info.vestingDuration; // (((100 * 100000) / 100) * 1008000)/8640000 = 11666.6666667
+                info.numberOfPeriods;
 
-            return totalUnlock - info.amountClaimed; // 11666.6666667
+            return totalUnlock - info.amountClaimed;
         }
     }
 }
