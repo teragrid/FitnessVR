@@ -230,12 +230,12 @@ contract Vesting is Ownable {
 
         uint256 totalUnlock = (info.tgeUnlockPercentage * info.amount) / 100;
 
-        uint256 passedSeconds = block.timestamp - tgeTimestamp;
+        uint256 passedSeconds = block.timestamp - tgeTimestamp; //1709691874 - 1686363874 = 23328000
 
-        if (passedSeconds == 0 || passedSeconds <= info.cliffDuration)
+        if (passedSeconds == 0 || passedSeconds <= info.cliffDuration) //5184000
             return totalUnlock;
 
-        passedSeconds -= info.cliffDuration;
+        passedSeconds -= info.cliffDuration;// 18144000
 
         if (info.vestingType == VestingType.LINEARLY) {
             totalUnlock =
@@ -246,7 +246,7 @@ contract Vesting is Ownable {
 
             return totalUnlock - info.amountClaimed;
         } else if (info.vestingType == VestingType.MONTHLY) {
-            uint256 passedPeriods = passedSeconds / periodDuration;
+            uint256 passedPeriods = passedSeconds / periodDuration; // 18144000 / 2592000 = 7
 
             totalUnlock =
                 totalUnlock +

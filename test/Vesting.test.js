@@ -43,9 +43,9 @@ let token;
             current = timestamp;
             console.log("current: " + current)
             token = await MUUVToken.deploy();
-            pool = await Vesting.deploy(token.address, current + SECONDS_IN_DAY * 30, 2);
-            console.log("tgetimétamp: " + (current + SECONDS_IN_DAY * 30))
-            console.log("unlockPeriod: " + 2);
+            pool = await Vesting.deploy(token.address, current + 86400 * 30, 2592000);
+            console.log("tgetimétamp: " + (current + 86400 * 30))
+            console.log("unlockPeriod: " + 2592000);
         });
     
         it('1.1: mint token', async () => {
@@ -65,18 +65,18 @@ let token;
         });
 
         
-        it('1.3: withdraw tge 0% - monthly', async () => {
+        it('1.3: withdraw pre-seed', async () => {
     
             const [owner, acc1] = await ethers.getSigners();
             await token.transfer(pool.address, 900000000);
             await pool.setTGETimestamp(current + SECONDS_IN_DAY);
     
-            await pool.addUser(acc1.address, 100000, 0, 0, SECONDS_IN_DAY * 100, 0);
-            console.log("sta_vestingDurationrt: " + (SECONDS_IN_DAY * 100));
+            await pool.addUser(acc1.address, 9000000, 3, 5184000, 24, 1);
+            console.log("sta_vestingDurationrt: " + 24);
 
             let x;
-            await ethers.provider.send('evm_increaseTime', [86400 * 100]);
-            console.log(" evm_increaseTime current: " + (current +86400 * 100));
+            await ethers.provider.send('evm_increaseTime', [86400 * 12 * 30]);
+            console.log(" evm_increaseTime current: " + (current + 86400 * 12 * 30));
 
             try{
                 await pool.connect(acc1).claim();
@@ -87,6 +87,6 @@ let token;
             x = await token.balanceOf(acc1.address);
             console.log("x: " + parseInt(x));
 
-            expect(x).to.equal(11666);
+            expect(x).to.equal(100000);
         });
     });
