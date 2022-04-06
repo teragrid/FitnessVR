@@ -10,20 +10,20 @@ contract Vesting is Ownable {
 
     enum VestingType {
         MONTHLY,
-        NEARLY
+        LINEARLY
     }
 
     struct UserVestingInfo {
         uint256 amount;
         uint256 tgeUnlockPercentage;
         uint256 amountClaimed;
-        uint256 cliffPeriod; // calculated by the number of seconds
+        uint256 cliffDuration; // calculated by the number of seconds
         uint256 numberOfPeriods; // calculated by the number of unlock period
         VestingType vestingType;
         bool exist;
     }
 
-    uint256 public unlockPeriod; // calculated by the number of seconds
+    uint256 public periodDuration; // calculated by the number of seconds
 
     IERC20 public token;
 
@@ -40,7 +40,7 @@ contract Vesting is Ownable {
     constructor(
         address _token,
         uint256 _tgeTimestamp,
-        uint256 _unlockPeriod
+        uint256 _periodDuration
     ) {
         require(
             _token != address(0),
@@ -51,13 +51,13 @@ contract Vesting is Ownable {
             "Vesting/constructor: TGE timestamp must be greater than block timestamp"
         );
         require(
-            _unlockPeriod > 0,
+            _periodDuration > 0,
             "Vesting/constructor: Unlock Period must be greater than zero"
         );
 
         token = IERC20(_token);
         tgeTimestamp = _tgeTimestamp;
-        unlockPeriod = _unlockPeriod;
+        periodDuration = _periodDuration;
     }
 
     modifier mustNotAfterTge() {
@@ -87,7 +87,7 @@ contract Vesting is Ownable {
         address _account,
         uint256 _amount,
         uint256 _tgeUnlockPercentage,
-        uint256 _cliffPeriod,
+        uint256 _cliffDuration,
         uint256 _numberOfPeriods,
         VestingType _vestingType
     ) public onlyOwner {
@@ -95,7 +95,7 @@ contract Vesting is Ownable {
             _account,
             _amount,
             _tgeUnlockPercentage,
-            _cliffPeriod,
+            _cliffDuration,
             _numberOfPeriods,
             _vestingType
         );
@@ -105,7 +105,7 @@ contract Vesting is Ownable {
         address[] memory _accounts,
         uint256[] memory _amounts,
         uint256[] memory _tgeUnlockPercentages,
-        uint256[] memory _cliffPeriods,
+        uint256[] memory _cliffDurations,
         uint256[] memory _numberOfPeriodss,
         VestingType[] memory _vestingTypes
     ) public onlyOwner {
@@ -113,8 +113,8 @@ contract Vesting is Ownable {
             _accounts.length > 0 &&
                 _accounts.length == _amounts.length &&
                 _amounts.length == _tgeUnlockPercentages.length &&
-                _tgeUnlockPercentages.length == _cliffPeriods.length &&
-                _cliffPeriods.length == _numberOfPeriodss.length &&
+                _tgeUnlockPercentages.length == _cliffDurations.length &&
+                _cliffDurations.length == _numberOfPeriodss.length &&
                 _numberOfPeriodss.length == _vestingTypes.length,
             "Vesting: Invalid parameters"
         );
@@ -124,7 +124,7 @@ contract Vesting is Ownable {
                 _accounts[i],
                 _amounts[i],
                 _tgeUnlockPercentages[i],
-                _cliffPeriods[i],
+                _cliffDurations[i],
                 _numberOfPeriodss[i],
                 _vestingTypes[i]
             );
@@ -135,7 +135,7 @@ contract Vesting is Ownable {
         address _account,
         uint256 _amount,
         uint256 _tgeUnlockPercentage,
-        uint256 _cliffPeriod,
+        uint256 _cliffDuration,
         uint256 _numberOfPeriods,
         VestingType _vestingType
     ) internal {
@@ -154,7 +154,7 @@ contract Vesting is Ownable {
 
         userToVesting[_account].amount = _amount;
         userToVesting[_account].tgeUnlockPercentage = _tgeUnlockPercentage;
-        userToVesting[_account].cliffPeriod = _cliffPeriod;
+        userToVesting[_account].cliffDuration = _cliffDuration;
         userToVesting[_account].numberOfPeriods = _numberOfPeriods;
         userToVesting[_account].vestingType = _vestingType;
         userToVesting[_account].exist = true;
@@ -232,21 +232,21 @@ contract Vesting is Ownable {
 
         uint256 passedSeconds = block.timestamp - tgeTimestamp;
 
-        if (passedSeconds == 0 || passedSeconds <= info.cliffPeriod)
+        if (passedSeconds == 0 || passedSeconds <= info.cliffDuration)
             return totalUnlock;
 
-        passedSeconds -= info.cliffPeriod;
+        passedSeconds -= info.cliffDuration;
 
-        if (info.vestingType == VestingType.NEARLY) {
+        if (info.vestingType == VestingType.LINEARLY) {
             totalUnlock =
                 totalUnlock +
                 ((((100 - info.tgeUnlockPercentage) * info.amount) / 100) *
                     passedSeconds) /
-                (unlockPeriod * info.numberOfPeriods);
+                (periodDuration * info.numberOfPeriods);
 
             return totalUnlock - info.amountClaimed;
         } else if (info.vestingType == VestingType.MONTHLY) {
-            uint256 passedPeriods = passedSeconds / unlockPeriod;
+            uint256 passedPeriods = passedSeconds / periodDuration;
 
             totalUnlock =
                 totalUnlock +
