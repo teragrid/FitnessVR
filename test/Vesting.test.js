@@ -75,8 +75,8 @@ let token;
             console.log("sta_vestingDurationrt: " + 24);
 
             let x;
-            await ethers.provider.send('evm_increaseTime', [86400 * 12 * 30]);
-            console.log(" evm_increaseTime current: " + (current + 86400 * 12 * 30));
+            await ethers.provider.send('evm_increaseTime', [86400 * 12 * 30 * 5]);
+            console.log(" evm_increaseTime current: " + (current + 86400 * 12 * 30 * 5));
 
             try{
                 await pool.connect(acc1).claim();
@@ -87,6 +87,6 @@ let token;
             x = await token.balanceOf(acc1.address);
             console.log("x: " + parseInt(x));
 
-            expect(x).to.equal(100000);
+            expect(x).to.equal(9000000);
         });
     });
