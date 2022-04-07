@@ -49,8 +49,9 @@ let token;
         });
     
         it('1.1: mint token', async () => {
+            const [owner, acc1, acc2] = await ethers.getSigners();
 
-            let x = (await token.balanceOf("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266")).toString();
+            let x = (await token.balanceOf(owner.address)).toString();
             console.log("x: " + x);
 
             expect(x).to.equal("900000000000000000000000000");
@@ -65,18 +66,110 @@ let token;
         });
 
         
-        it('1.3: withdraw pre-seed', async () => {
+        it('1.3.1: withdraw pre-seed 3% TGE unlock', async () => {
+            const [owner, acc1, acc2] = await ethers.getSigners();
     
-            const [owner, acc1] = await ethers.getSigners();
             await token.transfer(pool.address, 900000000);
             await pool.setTGETimestamp(current + SECONDS_IN_DAY);
     
-            await pool.addUser(acc1.address, 9000000, 3, 5184000, 24, 1);
+            await pool.addUser(acc2.address, 9000000, 3, 5184000, 24, 1);
             console.log("sta_vestingDurationrt: " + 24);
 
             let x;
             await ethers.provider.send('evm_increaseTime', [86400 * 12 * 30 * 5]);
             console.log(" evm_increaseTime current: " + (current + 86400 * 12 * 30 * 5));
+
+            try{
+                await pool.connect(acc2).claim();
+            } catch (e) {
+                throw e;
+            }
+
+            x = await token.balanceOf(acc2.address);
+            console.log("x: " + parseInt(x));
+
+            expect(x).to.equal(9000000);
+        });
+
+        
+        
+        it('1.3.2: withdraw pre-seed 3% TGE unlock, before cliff', async () => {
+            const [owner, acc1, acc2] = await ethers.getSigners();
+    
+            await token.transfer(pool.address, 900000000);
+            await pool.setTGETimestamp(current + SECONDS_IN_DAY);
+    
+            await pool.addUser(acc2.address, 9000000, 3, 5184000, 24, 1);
+            console.log("sta_vestingDurationrt: " + 24);
+
+            let x;
+            await ethers.provider.send('evm_increaseTime', [3888000]); //45 days
+            // console.log(" evm_increaseTime current: " + (current + 3888000));
+
+            try{
+                await pool.connect(acc2).claim();
+            } catch (e) {
+                throw e;
+            }
+
+            x = await token.balanceOf(acc2.address);
+            console.log("x: " + parseInt(x));
+
+            expect(x).to.equal(270000);
+        });
+        
+        
+        it('1.3.3: withdraw pre-seed 3% TGE unlock claim before cliff, then claim full', async () => {
+            const [owner, acc1, acc2] = await ethers.getSigners();
+    
+            await token.transfer(pool.address, 900000000);
+            await pool.setTGETimestamp(current + SECONDS_IN_DAY);
+    
+            await pool.addUser(acc2.address, 9000000, 3, 5184000, 24, 1);
+            console.log("sta_vestingDurationrt: " + 24);
+
+            let x;
+            await ethers.provider.send('evm_increaseTime', [SECONDS_IN_DAY * 35]); //45 days
+            // console.log(" evm_increaseTime current: " + (current + 3888000));
+
+            try{
+                await pool.connect(acc2).claim();
+            } catch (e) {
+                throw e;
+            }
+
+            x = await token.balanceOf(acc2.address);
+            console.log("x: " + parseInt(x));
+
+            expect(x).to.equal(270000);
+
+            await ethers.provider.send('evm_increaseTime', [SECONDS_IN_DAY * 360 * 2 + SECONDS_IN_DAY * 30]); 
+            // console.log(" evm_increaseTime current: " + (current + 3888000));
+
+            try{
+                await pool.connect(acc2).claim();
+            } catch (e) {
+                throw e;
+            }
+            let x2 = await token.balanceOf(acc2.address);
+            console.log("x2: " + parseInt(x2));
+            expect(x2).to.equal(9000000);
+        });
+        
+
+        
+        it('1.4: withdraw partners full', async () => {
+            const [owner, acc1, acc2] = await ethers.getSigners();
+    
+            await token.transfer(pool.address, 900000000);
+            await pool.setTGETimestamp(current + SECONDS_IN_DAY);
+    
+            await pool.addUser(acc1.address, 81000000, 3, 5184000, 24, 1);
+            console.log("sta_vestingDurationrt: " + 24);
+
+            let x;
+            await ethers.provider.send('evm_increaseTime', [86400 * 12 * 30 * 1]);
+            console.log(" evm_increaseTime current: " + (current + 86400 * 12 * 30 * 1));
 
             try{
                 await pool.connect(acc1).claim();
@@ -86,7 +179,13 @@ let token;
 
             x = await token.balanceOf(acc1.address);
             console.log("x: " + parseInt(x));
+            await ethers.provider.send('evm_increaseTime', [86400 * 12 * 30 * 2]);
+            console.log(" evm_increaseTime current: " + (current + 86400 * 12 * 30 * 2));
+            await pool.connect(acc1).claim();
+            x = await token.balanceOf(acc1.address);
+            console.log("x: " + parseInt(x));
 
-            expect(x).to.equal(9000000);
+            expect(x).to.equal(81000000);
         });
+        
     });

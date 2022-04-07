@@ -204,7 +204,7 @@ contract Vesting is Ownable {
 
         userToVesting[_msgSender()].amountClaimed += claimableAmount;
 
-        totalVesting -= claimableAmount;
+        totalVesting = totalVesting - claimableAmount;
 
         token.safeTransfer(_msgSender(), claimableAmount);
 
@@ -225,36 +225,35 @@ contract Vesting is Ownable {
         returns (uint256 claimableAmount)
     {
         UserVestingInfo memory info = userToVesting[_user];
-
         if (block.timestamp < tgeTimestamp) return 0;
-
-        uint256 totalUnlock = (info.tgeUnlockPercentage * info.amount) / 100;
-
-        uint256 passedSeconds = block.timestamp - tgeTimestamp; //1709691874 - 1686363874 = 23328000
-
-        if (passedSeconds == 0 || passedSeconds <= info.cliffDuration) //5184000
+        uint256 totalUnlock = (info.tgeUnlockPercentage * info.amount) / 100; //2430000
+        uint256 passedSeconds = block.timestamp - tgeTimestamp; //1991382324 - 1962870324 = 28512000
+        if (passedSeconds == 0 || passedSeconds <= info.cliffDuration)
             return totalUnlock;
-
-        passedSeconds -= info.cliffDuration;// 18144000
-
+        passedSeconds -= info.cliffDuration; //28512000 - 5184000 = 23328000
         if (info.vestingType == VestingType.LINEARLY) {
-            totalUnlock =
-                totalUnlock +
-                ((((100 - info.tgeUnlockPercentage) * info.amount) / 100) *
-                    passedSeconds) /
-                (periodDuration * info.numberOfPeriods);
-
-            return totalUnlock - info.amountClaimed;
+            if (passedSeconds >= periodDuration * info.numberOfPeriods) // 2592000 * 24 = 62208000
+                totalUnlock +=
+                    ((info.amount * (100 - info.tgeUnlockPercentage))) /  
+                    100;
+            else
+                totalUnlock +=
+                    ((info.amount * (100 - info.tgeUnlockPercentage)) * //
+                        passedSeconds) /
+                    (100 * periodDuration * info.numberOfPeriods); //6220800000
         } else if (info.vestingType == VestingType.MONTHLY) {
-            uint256 passedPeriods = passedSeconds / periodDuration; // 18144000 / 2592000 = 7
-
-            totalUnlock =
+            uint256 passedPeriods = passedSeconds / periodDuration;
+            if (passedPeriods >= info.numberOfPeriods)
+                totalUnlock =
+                    totalUnlock +
+                    (((100 - info.tgeUnlockPercentage) * info.amount) / 100);
+            else
                 totalUnlock +
-                ((((100 - info.tgeUnlockPercentage) * info.amount) / 100) *
-                    passedPeriods) /
-                info.numberOfPeriods;
-
-            return totalUnlock - info.amountClaimed;
+                    ((((100 - info.tgeUnlockPercentage) * info.amount) / 100) *
+                        passedPeriods) /
+                    info.numberOfPeriods;
         }
+
+        return totalUnlock - info.amountClaimed;
     }
 }
