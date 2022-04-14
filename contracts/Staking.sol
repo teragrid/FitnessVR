@@ -19,10 +19,10 @@ contract Staking is AccessControl {
         uint256 amountClaimed;
         uint256 totalReward;
         uint256 startStakingTime;
-        uint256 lastClaimedTime;
+        uint256 lastMilestoneClaimed;
         uint256 totalMonthStake;
+        uint256 interval;
         uint256 apy;
-        uint256 stakingId;
     }
 
     mapping (address => StakingModel[]) private _stakingInfo;
@@ -40,31 +40,30 @@ contract Staking is AccessControl {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
 
-    function stake(uint256 _amount, uint256 _apy, uint256 _duration) external {
+    function stake(uint256 _amount, uint256 _apy, uint256 _totalMonthStake, uint256 _interval) external {
         require(block.timestamp > _enableStakeDate, "Staking/stake: must stake before start enable stake date");
         require(block.timestamp < _disableStakingDate, "Staking/stake: must stake after start disable stake date");
-        require(_amount > 0 && _apy > 0 && _duration > 0, "Staking/stake: invalid params input");
+        require(_amount > 0 && _apy > 0 && _totalMonthStake > 0 && _totalMonthStake > _interval, "Staking/stake: invalid params input");
+        require(_totalMonthStake % _interval == 0, "Staking/stake: interval must be divisor of duration");
         
-        uint256 _stakeId;
-        if(_stakingInfo[msg.sender].length > 0) {
-            _stakeId = _stakingInfo[msg.sender][_stakingInfo[msg.sender].length - 1].stakingId + 1;
-        }
-        uint256 _apyPerMonth = (_apy * 1e12) / _duration;
+        uint256 milestones = _totalMonthStake / _interval;
+        uint256 _apyPerInterval = (_apy * 1e12) / milestones;
         uint256 totalReward;
-        for(uint256 i = 1; i <= _duration; i++) {
-            totalReward = totalReward + ((_amount + totalReward) * _apyPerMonth) / (1e12 * 100);
+        for(uint256 i = 1; i <= milestones; i++) {
+            totalReward = totalReward + ((_amount + totalReward) * _apyPerInterval) / (1e12 * 100);
         }
         totalReward += _amount;
 
-        _stakingInfo[msg.sender].push(StakingModel(_amount, 0, totalReward, block.timestamp, 0, _duration, _apy, _stakeId));
+        _stakingInfo[msg.sender].push(StakingModel(_amount, 0, totalReward, block.timestamp, 0, _totalMonthStake, _interval, _apy));
+        uint256 _stakeId = _stakingInfo[msg.sender].length - 1;
         _MUUVToken.safeTransferFrom(msg.sender, address(this), _amount);
         _grantRole(STAKER_ROLE, msg.sender);
         emit Staked(msg.sender, _amount, _stakeId);
     }
     
-    function stakeInfo(address user, uint256 _stakeId) external view returns (uint256 amount, uint256 amountClaimed, uint256 totalReward) {
+    function stakeInfo(address user, uint256 _stakeId) external view returns (uint256 amount, uint256 amountClaimed, uint256 totalReward, uint256 milestones,uint256 lastmilestones) {
         StakingModel storage stakingModel = _stakingInfo[user][_stakeId];
-        return (stakingModel.amount, stakingModel.amountClaimed, stakingModel.totalReward);
+        return (stakingModel.amount, stakingModel.amountClaimed, stakingModel.totalReward, stakingModel.totalMonthStake / stakingModel.interval, stakingModel.lastMilestoneClaimed);
     }
 
     function claim(uint256 _stakeId) external onlyRole(STAKER_ROLE) {
@@ -80,23 +79,27 @@ contract Staking is AccessControl {
         require(block.timestamp > stakingModel.startStakingTime, "Staking/_calculateClaimToken: current claim must after start staking time");
         uint256 totalClaim;
         uint256 passedPeriod;
-        if(stakingModel.lastClaimedTime == 0) {
-            passedPeriod = (block.timestamp - stakingModel.startStakingTime) / (30 * SECONDS_PER_DAY);
-            if(passedPeriod > stakingModel.totalMonthStake) {
-                passedPeriod = stakingModel.totalMonthStake;
+        uint256 milestones = stakingModel.totalMonthStake/ stakingModel.interval;
+        uint256 currrentMilestone = (block.timestamp - stakingModel.startStakingTime) / (stakingModel.interval * 30 * SECONDS_PER_DAY);
+        if(stakingModel.lastMilestoneClaimed == 0) {
+            passedPeriod = (block.timestamp - stakingModel.startStakingTime) / (stakingModel.interval * 30 * SECONDS_PER_DAY);
+            if(passedPeriod > milestones) {
+                passedPeriod = milestones;
+                currrentMilestone = milestones;
             }
+            totalClaim = (stakingModel.totalReward * passedPeriod)/milestones;
         } else {
-            uint256 totalPeriodClaimed = stakingModel.amountClaimed / (stakingModel.totalReward/ stakingModel.totalMonthStake);
-            if((block.timestamp - stakingModel.lastClaimedTime) / (30 * SECONDS_PER_DAY) + totalPeriodClaimed >= stakingModel.totalMonthStake) {
-                passedPeriod = stakingModel.totalMonthStake - totalPeriodClaimed;
+            if((block.timestamp - stakingModel.startStakingTime) / (stakingModel.interval * 30 * SECONDS_PER_DAY) >= milestones) {
+                passedPeriod = milestones - stakingModel.lastMilestoneClaimed;
+                currrentMilestone = milestones;
             } else {
-                passedPeriod = (block.timestamp - stakingModel.lastClaimedTime) / (30 * SECONDS_PER_DAY);
+                passedPeriod = currrentMilestone - stakingModel.lastMilestoneClaimed;
             }
+            totalClaim = (stakingModel.totalReward * passedPeriod)/milestones;
         }
 
-        totalClaim += (stakingModel.totalReward * passedPeriod)/stakingModel.totalMonthStake;
         stakingModel.amountClaimed += totalClaim;
-        stakingModel.lastClaimedTime = block.timestamp;
+        stakingModel.lastMilestoneClaimed = currrentMilestone;
         return totalClaim;
     }
 
