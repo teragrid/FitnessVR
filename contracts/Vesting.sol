@@ -90,7 +90,7 @@ contract Vesting is Ownable {
         uint256 _cliffDuration,
         uint256 _numberOfPeriods,
         VestingType _vestingType
-    ) public onlyOwner {
+    ) public onlyOwner mustNotAfterTge {
         _addUser(
             _account,
             _amount,
@@ -108,7 +108,7 @@ contract Vesting is Ownable {
         uint256[] memory _cliffDurations,
         uint256[] memory _numberOfPeriodss,
         VestingType[] memory _vestingTypes
-    ) public onlyOwner {
+    ) public onlyOwner mustNotAfterTge {
         require(
             _accounts.length > 0 &&
                 _accounts.length == _amounts.length &&
@@ -147,6 +147,7 @@ contract Vesting is Ownable {
             userToVesting[_account].exist == false,
             "Vesting: User already exists"
         );
+        require(_amount >= 100, "Vesting: Amount must be greater than 100 wei");
         require(
             _tgeUnlockPercentage <= 100,
             "Vesting: TGE unlock percentage must be less than 100"
@@ -226,21 +227,22 @@ contract Vesting is Ownable {
     {
         UserVestingInfo memory info = userToVesting[_user];
         if (block.timestamp < tgeTimestamp) return 0;
-        uint256 totalUnlock = (info.tgeUnlockPercentage * info.amount) / 100; //2430000
-        uint256 passedSeconds = block.timestamp - tgeTimestamp; //1991382324 - 1962870324 = 28512000
+        uint256 totalUnlock = (info.tgeUnlockPercentage * info.amount) / 100;
+        uint256 passedSeconds = block.timestamp - tgeTimestamp;
         if (passedSeconds == 0 || passedSeconds <= info.cliffDuration)
-            return totalUnlock;
-        passedSeconds -= info.cliffDuration; //28512000 - 5184000 = 23328000
+            return totalUnlock - info.amountClaimed;
+        passedSeconds = passedSeconds - info.cliffDuration;
         if (info.vestingType == VestingType.LINEARLY) {
-            if (passedSeconds >= periodDuration * info.numberOfPeriods) // 2592000 * 24 = 62208000
-                totalUnlock +=
-                    ((info.amount * (100 - info.tgeUnlockPercentage))) /  
+            if (passedSeconds >= periodDuration * info.numberOfPeriods)
+                totalUnlock =
+                    totalUnlock +
+                    ((info.amount * (100 - info.tgeUnlockPercentage))) /
                     100;
             else
                 totalUnlock +=
-                    ((info.amount * (100 - info.tgeUnlockPercentage)) * //
+                    ((info.amount * (100 - info.tgeUnlockPercentage)) *
                         passedSeconds) /
-                    (100 * periodDuration * info.numberOfPeriods); //6220800000
+                    (100 * periodDuration * info.numberOfPeriods);
         } else if (info.vestingType == VestingType.MONTHLY) {
             uint256 passedPeriods = passedSeconds / periodDuration;
             if (passedPeriods >= info.numberOfPeriods)
@@ -248,7 +250,8 @@ contract Vesting is Ownable {
                     totalUnlock +
                     (((100 - info.tgeUnlockPercentage) * info.amount) / 100);
             else
-                totalUnlock +
+                totalUnlock =
+                    totalUnlock +
                     ((((100 - info.tgeUnlockPercentage) * info.amount) / 100) *
                         passedPeriods) /
                     info.numberOfPeriods;
