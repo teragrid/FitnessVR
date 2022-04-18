@@ -8,10 +8,11 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 contract Staking is AccessControl {
     using SafeERC20 for IERC20;
 
-    uint32 private constant SECONDS_PER_DAY = 24 * 60 * 60;
     IERC20 private _MUUVToken;
     uint256 private _enableStakeDate;
     uint256 private _disableStakingDate;
+    uint256 private _totalRewardToken;
+    uint32 private constant SECONDS_PER_DAY = 24 * 60 * 60;
     bytes32 public constant STAKER_ROLE = keccak256("STAKER_ROLE");
     
     struct StakingModel {
@@ -54,6 +55,9 @@ contract Staking is AccessControl {
         }
         totalReward += _amount;
 
+        require(_MUUVToken.balanceOf(address(this)) >= _totalRewardToken + totalReward, "Staking/stake: not enough reward for this stake");
+
+        _totalRewardToken += totalReward;
         _stakingInfo[msg.sender].push(StakingModel(_amount, 0, totalReward, block.timestamp, 0, _totalMonthStake, _interval, _apy));
         uint256 _stakeId = _stakingInfo[msg.sender].length - 1;
         _MUUVToken.safeTransferFrom(msg.sender, address(this), _amount);
