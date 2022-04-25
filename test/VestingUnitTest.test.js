@@ -7,7 +7,7 @@ const { time } = require('@openzeppelin/test-helpers');
 const MONTHLY = 0;
 const LINEARLY = 1;
 
-describe.only('Vesting', async () => {
+describe('Vesting', async () => {
   let admin, user1, user2, user3, user4;
   let vesting;
   let muuv;
